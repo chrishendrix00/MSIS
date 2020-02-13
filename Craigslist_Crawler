@@ -1,0 +1,39 @@
+#This is a web crawler that collects several metrics on Vacation Homes posted on seattle.craigslist.org. 
+#It searches all search result pages, rather than just the first page, and pulls information from each 
+#individual listing's page. 
+
+
+import scrapy
+from scrapy import Request
+
+class CarsSpider(scrapy.Spider):
+    name = 'cars'
+    allowed_domains = ['craigslist.org']
+    start_urls = ['https://seattle.craigslist.org/d/vacation-rentals/search/vac']
+
+    def parse(self, response):
+        cars = response.xpath('//p[@class="result-info"]')
+        for car in cars:
+            title = car.xpath('a/text()').extract_first()
+            address = car.xpath('span[@class="result-meta"]/span[@class="result-hood"]/text()').extract_first("")[2:-1]
+            price = car.xpath('span[@class="result-meta"]/span[@class="result-price"]/text()').extract_first()
+            bedrooms = car.xpath('span[@class="result-meta"]/span[@class="housing"]/text()').extract_first("")[21:24]
+            relative_url = car.xpath('a/@href').extract_first()
+            absolute_url = response.urljoin(relative_url)
+
+            yield Request(absolute_url, callback=self.parse_page, meta = {'URL':absolute_url, 'Title':title, 'Neighborhood':address, 'Rental_Price': price, 'Number_of_Bedrooms': bedrooms})
+
+        relative_next_url = response.xpath('//a[@class="button next"]/@href').extract_first()
+        absolute_next_url = response.urljoin(relative_next_url)
+        
+        yield Request(absolute_next_url, callback=self.parse)
+
+
+
+    def parse_page(self, response):
+
+        response.meta['Description'] = "".join(line for line in response.xpath('//section[@id="postingbody"]/text()').extract()).strip()
+        response.meta['Posted_Date'] = "".join(line for line in response.xpath('/time[@class="date timeago"]/datetime').extract_first())
+
+
+        yield response.meta
